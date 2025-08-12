@@ -119,7 +119,7 @@ defmodule Bookk.Ecto do
       @config [chart_of_accounts: __MODULE__]
               |> Keyword.merge(if(is_atom(unquote(otp_app)), do: Application.compile_env(unquote(otp_app), __MODULE__), else: []))
               |> Keyword.merge(unquote(opts_from_use))
-              |> unquote(__MODULE__).parse_config(opts)
+              |> unquote(__MODULE__).parse_config()
 
       if @config.chart_of_accounts == __MODULE__ do
         use Bookk.ChartOfAccounts
