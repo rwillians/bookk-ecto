@@ -4,6 +4,16 @@ defmodule Bookk.Ecto do
 
       defmodule MyApp.Bookkeeping do
         use Bookk.Ecto, repo: Pag3.Repo
+
+        @impl Bookk.ChartOfAccounts
+        def ledger(:main), do: "main"
+
+        @impl Bookk.ChartOfAccounts
+        def class("A"), do: %Class{id: "A", parent_id: nil, name: "Assets", natural_balance: :debit}
+        def class("CA"), do: %Class{id: "CA", parent_id: "A", name: "Current Assets", natural_balance: :debit}
+
+        @impl Bookk.ChartOfAccounts
+        def account(:cash), do: %Account{name: "cash/CA", class: class("CA")}
       end
 
   ## Options
@@ -15,19 +25,18 @@ defmodule Bookk.Ecto do
   - `accounts_table`: the name of the table where the accounts' balance state
     should be persisted. Defaults to "bookk_accounts";
   - `account_entries_table`: the name of the table where the accounts balances'
-    change log should be persisted. Defaults to "bookk_account_entries".
-  - `resolve_account_groups_with`: a `{module, :function}` tuple or the reference
-    to a callback function of arity 1 that will be called to resolve the ids of
-    account groups to which a given account's class belongs. Defaults to the
-    callback function `get_account_group_ids/1` in your bookkeeping module.
+    change log should be persisted. Defaults to "bookk_account_entries";
+  - `chart_of_accounts`: your chart of accounts module, in case you prefer to
+    have it in a separate module. The absence of this option implies that your
+    bookkeeping module should also implement `Bookk.ChartOfAccounts`.
 
-      defmodule MyApp.Bookkeeping do
-        use Bookk.Ecto,
-          repo: MyApp.Repo,
-          accounts_table: "bookkeeping_accounts",
-          account_entries_table: "bookkeeping_account_entries",
-          resolve_account_groups_with: {MyApp.Bookkeeping.ChartOfAccounts, :get_account_groups}
-      end
+        defmodule MyApp.Bookkeeping do
+          use Bookk.Ecto,
+            repo: MyApp.Repo,
+            accounts_table: "bookkeeping_accounts",
+            account_entries_table: "bookkeeping_account_entries",
+            chart_of_accounts: MyApp.Bookkeeping.ChartOfAccounts
+        end
 
   Alternativelly, these options can be set in your config files where
   the configuration key is the name of your bookkeeping module:
@@ -36,7 +45,7 @@ defmodule Bookk.Ecto do
         repo: MyApp.Repo,
         accounts_table: "bookk_accounts",
         account_entries_table: "bookk_account_entries",
-        resolve_account_groups_with: {MyApp.Bookkeeping, :get_account_groups}
+        chart_of_accounts: MyApp.Bookkeeping.ChartOfAccounts
 
       defmodule MyApp.Bookkeeping do
         use Bookk.Ecto, otp_app: :my_app
@@ -73,6 +82,7 @@ defmodule Bookk.Ecto do
   import Ecto.Changeset, only: [put_change: 3]
 
   alias __MODULE__, as: Config
+  alias Bookk.AccountClass
   alias Bookk.Ecto.Account
   alias Bookk.Ecto.AccountEntry
   alias Bookk.InterledgerEntry
@@ -85,39 +95,38 @@ defmodule Bookk.Ecto do
            repo: [type: :module, required: true],
            accounts_table: [type: :string, required: true, default: "bookk_accounts"],
            account_entries_table: [type: :string, required: true, default: "bookk_account_entries"],
-           resolve_account_groups_with: [type: {:either, [{:tuple, {:module, :atom}}, {:fun, arity: 1}]}, required: true]
+           chart_of_accounts: [type: :module, required: true]
 
   @type t() :: %Config{
           otp_app: atom() | nil,
           repo: Ecto.Repo.t(),
           accounts_table: String.t(),
           account_entries_table: String.t(),
-          resolve_account_groups_with: {module(), function :: atom()} | (Bookk.AccountClass -> [String.t(), ...])
+          chart_of_accounts: module()
         }
 
   defstruct otp_app: nil,
             repo: nil,
             accounts_table: nil,
             account_entries_table: nil,
-            resolve_account_groups_with: nil
+            chart_of_accounts: nil
 
   @doc false
   defmacro __using__(opts_from_use) do
     otp_app = Keyword.get(opts_from_use, :otp_app)
 
     quote do
-      default_opts =
-        [resolve_account_groups_with: {__MODULE__, :get_account_group_ids}]
-
-      opts_from_config =
-        if is_atom(unquote(otp_app)),
-          do: Application.compile_env(otp_app, __MODULE__),
-          else: []
-
-      @config default_opts
-              |> Keyword.merge(opts_from_config)
+      @config [chart_of_accounts: __MODULE__]
+              |> Keyword.merge(if(is_atom(unquote(otp_app)), do: Application.compile_env(otp_app, __MODULE__), else: []))
               |> Keyword.merge(unquote(opts_from_use))
-              |> unquote(__MODULE__).parse_config()
+              |> unquote(__MODULE__).parse_config(opts)
+
+      if @config.chart_of_accounts == __MODULE__ do
+        use Bookk.ChartOfAccounts
+
+        alias Bookk.AccountClass, as: Class
+        alias Bookk.AccountHead, as: Account
+      end
 
       @doc ~S"""
       Introspection function that returns the module's configs.
@@ -144,7 +153,7 @@ defmodule Bookk.Ecto do
       - `:repo`;
       - `:accounts_table`;
       - `:account_entries_table`; and
-      - `:resolve_account_groups_with`;
+      - `:chart_of_accounts`;
       """
       @spec __config__(key :: atom()) :: term()
 
@@ -213,6 +222,30 @@ defmodule Bookk.Ecto do
 
       def post(%Ecto.Multi{} = multi, %Bookk.InterledgerEntry{} = interledger_entry),
         do: unquote(__MODULE__).post(multi, interledger_entry, @config)
+
+      @doc ~S"""
+      Given a class id, it returns all the groups to which the account class
+      belongs.
+
+            MyApp.Bookkeeping.resolve_account_groups("CA")
+            #> ["CA", "A"]
+
+      """
+      @spec resolve_account_groups(class_id :: String.t()) :: [String.t(), ...]
+
+      def resolve_account_groups(class_id),
+        do: unquote(__MODULE__).resolve_account_groups(class_id, @config)
+    end
+  end
+
+  @doc false
+  def resolve_account_groups(<<class_id::binary>>, %Config{} = config) do
+    class = apply(config.chart_of_accounts, :class, [class_id])
+
+    case class do
+      nil -> raise(ArgumentError, "Account class #{class_id} doesn't exist in #{inspect(config.chart_of_accounts)}")
+      %AccountClass{parent_id: nil} -> [class.id]
+      %AccountClass{parent_id: <<parent_id::binary>>} -> [class.id | resolve_account_groups(parent_id, config)]
     end
   end
 
@@ -264,8 +297,8 @@ defmodule Bookk.Ecto do
       ledger_id: ledger_id,
       account_id: account_id,
       account_name: op.account_head.name,
-      account_class: op.account_head.class.id,
-      account_groups: call(config.resolve_account_groups_with, [op.account_head.class]),
+      account_class_id: op.account_head.class.id,
+      account_groups: resolve_account_groups(op.account_head.class.id, config),
       account_meta: op.account_head.meta,
       delta_amount: to_delta_amount(op),
       accounts_table: config.accounts_table,
@@ -279,9 +312,6 @@ defmodule Bookk.Ecto do
     |> upsert_account(payload)
     |> insert_account_entry(payload)
   end
-
-  defp call({mod, fun}, args) when is_atom(mod) and is_atom(fun), do: apply(mod, fun, args)
-  defp call(fun, args) when is_function(fun, 1), do: apply(fun, args)
 
   defp to_existing_atom_safe(<<_, _::binary>> = str) do
     String.to_existing_atom(str)
@@ -297,7 +327,7 @@ defmodule Bookk.Ecto do
         id: payload.account_id,
         ledger_id: payload.ledger_id,
         name: payload.account_name,
-        class: payload.account_class,
+        class: payload.account_class_id,
         groups: payload.account_groups,
         balance: payload.delta_amount,
         meta: payload.account_meta,
