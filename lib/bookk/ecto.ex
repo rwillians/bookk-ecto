@@ -325,7 +325,7 @@ defmodule Bookk.Ecto do
 
     multi
     |> Multi.put(:bookk_transaction_id, tx.id)
-    |> multi_reduce(ledger_ops, &post_op(&2, &1, tx, config))
+    |> multi_reduce(ledger_ops, &post_op(&1, &2, tx, config))
   end
 
   #
