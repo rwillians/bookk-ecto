@@ -123,9 +123,55 @@ defmodule Bookk.Ecto do
 
       if @config.chart_of_accounts == __MODULE__ do
         use Bookk.ChartOfAccounts
+      end
 
-        alias Bookk.AccountClass, as: Class
-        alias Bookk.AccountHead, as: Account
+      import Bookk.Notation, only: [journalize: 2, journalize!: 2]
+
+      @doc ~S"""
+      DSL macro for creating a `Bookk.InterledgerEntry`. Returns an :ok|:error
+      tuple, where it will be an :error if the journal entry is unbalanced.
+
+          journalize do
+            on ledger(:main) do
+              debit account(:cash), 100
+              credit account(:revenue), 100
+            end
+          end
+          #> {:ok, %Bookk.InterledgerEntry{...}}
+
+      """
+      @spec journalize(do: term()) ::
+              {:ok, Bookk.InterledgerEntry.t()}
+              | {:error, Bookk.UnbalancedError.t()}
+
+      defmacro journalize(do: block) do
+        quote do
+          journalize using: unquote(@config.chart_of_accounts) do
+            unquote(block)
+          end
+        end
+      end
+
+      @doc ~S"""
+      Same as `journalize/1` but raises if the interledger entry is unbalanced.
+
+          journalize! do
+            on ledger(:main) do
+              debit account(:cash), 100
+              credit account(:revenue), 100
+            end
+          end
+          #> %Bookk.InterledgerEntry{...}
+
+      """
+      @spec journalize(do: term()) :: Bookk.InterledgerEntry.t()
+
+      defmacro journalize!(do: block) do
+        quote do
+          journalize! using: unquote(@config.chart_of_accounts) do
+            unquote(block)
+          end
+        end
       end
 
       @doc ~S"""

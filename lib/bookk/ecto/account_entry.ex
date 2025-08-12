@@ -9,7 +9,7 @@ defmodule Bookk.Ecto.AccountEntry do
   import Ecto.Changeset
 
   @type t() :: %Bookk.Ecto.AccountEntry{
-          id: String.t(),
+          id: Ecto.ULID.t(),
           account_id: String.t(),
           transaction_id: String.t(),
           delta_amount: Decimal.t(),
@@ -17,7 +17,7 @@ defmodule Bookk.Ecto.AccountEntry do
           inserted_at: DateTime.t()
         }
 
-  @primary_key {:id, :string, []}
+  @primary_key {:id, Ecto.ULID, autogenerate: true}
   schema "bookk_account_entries" do
     field :account_id, :string
     field :transaction_id, :string
@@ -31,12 +31,11 @@ defmodule Bookk.Ecto.AccountEntry do
         when record: t(),
              params: map()
 
-  @fields [:id, :account_id, :transaction_id, :delta_amount, :balance_after, :inserted_at]
+  @fields [:account_id, :transaction_id, :delta_amount, :balance_after, :inserted_at]
   def changeset(%Bookk.Ecto.AccountEntry{} = record, params) do
     record
     |> cast(params, @fields)
     |> validate_required(@fields)
-    |> validate_length(:id, min: 1, max: 36)
     |> validate_length(:account_id, min: 1, max: 255)
     |> validate_length(:transaction_id, min: 1, max: 36)
   end
