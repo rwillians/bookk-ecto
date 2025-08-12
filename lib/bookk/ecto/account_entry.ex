@@ -20,7 +20,7 @@ defmodule Bookk.Ecto.AccountEntry do
   @primary_key {:id, Ecto.ULID, autogenerate: true}
   schema "bookk_account_entries" do
     field :account_id, :string
-    field :transaction_id, :string
+    field :transaction_id, Ecto.ULID
     field :delta_amount, :decimal
     field :balance_after, :decimal
     field :inserted_at, :utc_datetime_usec
