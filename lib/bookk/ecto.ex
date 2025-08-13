@@ -127,6 +127,24 @@ defmodule Bookk.Ecto do
 
       import Bookk.Notation, only: [journalize: 2, journalize!: 2]
 
+      @doc false
+      defmacro __using__(opts) do
+        importables = [{:journalize, 1}, {:journalize!, 1}]
+        only = Keyword.get(opts, :only, importables)
+        unknown_imports = only -- importables
+
+        if match?([_ | _], unknown_imports) do
+          raise ArgumentError,
+                message: """
+                Invalid imports on #{__CALLER__.module}: #{inspect(unknown_imports)}
+                """
+        end
+
+        quote do
+          import unquote(__MODULE__), only: unquote(only)
+        end
+      end
+
       @doc ~S"""
       DSL macro for creating a `Bookk.InterledgerEntry`. Returns an :ok|:error
       tuple, where it will be an :error if the journal entry is unbalanced.
