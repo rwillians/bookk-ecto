@@ -51,7 +51,7 @@ defmodule BookkEcto.MixProject do
 
   defp deps do
     [
-      {:bookk, github: "rwillians/bookk", ref: "5d0d97d"},
+      {:bookk, github: "rwillians/bookk", ref: "4dfc2b8"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false, optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false, optional: true},
       {:ecto, "~> 3.13"},

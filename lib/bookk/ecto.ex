@@ -127,21 +127,90 @@ defmodule Bookk.Ecto do
 
       import Bookk.Notation, only: [journalize: 2, journalize!: 2]
 
-      @doc false
-      defmacro __using__(opts) do
-        importables = [{:journalize, 1}, {:journalize!, 1}]
-        only = Keyword.get(opts, :only, importables)
-        unknown_imports = only -- importables
+      @doc ~S"""
+      Introspection function that returns the module's configs.
 
-        if match?([_ | _], unknown_imports) do
-          raise ArgumentError,
-                message: """
-                Invalid imports on #{__CALLER__.module}: #{inspect(unknown_imports)}
-                """
-        end
+          MyApp.Bookkeeping.__config__()
+          #> %Bookk.Ecto{...}
 
+      """
+      @spec __config__() :: unquote(__MODULE__).t()
+
+      def __config__, do: @config
+
+      @doc ~S"""
+      Introspection function that returns the value of a specific config.
+
+          MyApp.Bookkeeping.__config__(:accounts_table)
+          #> "bookk_accounts"
+
+      If you try to read a config that doesn't exist, it will raise an
+      `ArgumentError`.
+
+      The available configs are:
+      - `:otp_app`;
+      - `:repo`;
+      - `:accounts_table`;
+      - `:account_entries_table`; and
+      - `:chart_of_accounts`;
+      """
+      @spec __config__(key :: atom()) :: term()
+
+      def __config__(key) when is_atom(key), do: Map.fetch!(@config, key)
+
+      @doc ~S"""
+      Given a class id, it returns all the groups to which the account class
+      belongs.
+
+            MyApp.Bookkeeping.account_groups("CA")
+            #> ["CA", "A"]
+
+      """
+      @spec account_groups(class_id :: String.t()) :: [String.t(), ...]
+
+      def account_groups(class_id),
+        do: unquote(__MODULE__).account_groups(class_id, @config)
+
+      @doc ~S"""
+      Takes the balance of an account after posting changes to it.
+
+          {:ok, multi_result} = MyApp.Bookkeeping.post(interledger_entry)
+
+          ledger = MyApp.Bookkeeping.ledger(:acme)
+          account = MyApp.Bookkeeping.account(:cash)
+          account_id = MyApp.Bookkeeping.account_id(ledger, account)
+
+          balance_after = MyApp.Bookkeeping.balance_after!(multi_result, account_id)
+          # %Decimal{...}
+
+      """
+      @spec balance_after!(multi_result, account_id) :: balance
+            when multi_result: map(),
+                 account_id: String.t(),
+                 balance: Decimal.t()
+
+      def balance_after!(%{} = multi_result, <<_, _::binary>> = account_id),
+        do: unquote(__MODULE__).balance_after!(multi_result, account_id)
+
+      @doc ~S"""
+      Returns the configured accounts / account entries table name and model.
+
+          from a in bookk_table(:accounts),
+            where: a.updated_at >= ^timestamp
+
+          from a in bookk_table(:account_entries),
+            where: a.created_at >= ^timestamp
+
+      """
+      defmacro bookk_table(:accounts) do
         quote do
-          import unquote(__MODULE__), only: unquote(only)
+          {unquote(@config.accounts_table), Bookk.Ecto.Account}
+        end
+      end
+
+      defmacro bookk_table(:account_entries) do
+        quote do
+          {unquote(@config.account_entries_table), Bookk.Ecto.AccountEntry}
         end
       end
 
@@ -193,59 +262,6 @@ defmodule Bookk.Ecto do
       end
 
       @doc ~S"""
-      Introspection function that returns the module's configs.
-
-          MyApp.Bookkeeping.__config__()
-          #> %Bookk.Ecto{...}
-
-      """
-      @spec __config__() :: unquote(__MODULE__).t()
-
-      def __config__, do: @config
-
-      @doc ~S"""
-      Introspection function that returns the value of a specific config.
-
-          MyApp.Bookkeeping.__config__(:accounts_table)
-          #> "bookk_accounts"
-
-      If you try to read a config that doesn't exist, it will raise an
-      `ArgumentError`.
-
-      The available configs are:
-      - `:otp_app`;
-      - `:repo`;
-      - `:accounts_table`;
-      - `:account_entries_table`; and
-      - `:chart_of_accounts`;
-      """
-      @spec __config__(key :: atom()) :: term()
-
-      def __config__(key) when is_atom(key), do: Map.fetch!(@config, key)
-
-      @doc ~S"""
-      Returns the configured accounts / account entries table name and model.
-
-          from a in bookk_table(:accounts),
-            where: a.updated_at >= ^timestamp
-
-          from a in bookk_table(:account_entries),
-            where: a.created_at >= ^timestamp
-
-      """
-      defmacro bookk_table(:accounts) do
-        quote do
-          {unquote(@config.accounts_table), Bookk.Ecto.Account}
-        end
-      end
-
-      defmacro bookk_table(:account_entries) do
-        quote do
-          {unquote(@config.account_entries_table), Bookk.Ecto.AccountEntry}
-        end
-      end
-
-      @doc ~S"""
       Posts an interledger entry to the bookkeeping pesisted state in the
       configured Ecto repository, returning the id of the transaction.
 
@@ -288,29 +304,38 @@ defmodule Bookk.Ecto do
         do: unquote(__MODULE__).post(multi, interledger_entry, @config)
 
       @doc ~S"""
-      Given a class id, it returns all the groups to which the account class
-      belongs.
-
-            MyApp.Bookkeeping.resolve_account_groups("CA")
-            #> ["CA", "A"]
-
+      Fetches bookk's transaction id from the given multi result
+      object.
       """
-      @spec resolve_account_groups(class_id :: String.t()) :: [String.t(), ...]
+      @spec transaction_id!(multi_result) :: transaction_id
+            when multi_result: map(),
+                 transaction_id: String.t()
 
-      def resolve_account_groups(class_id),
-        do: unquote(__MODULE__).resolve_account_groups(class_id, @config)
+      def transaction_id!(%{} = multi_result),
+        do: unquote(__MODULE__).transaction_id!(multi_result)
     end
   end
 
   @doc false
-  def resolve_account_groups(<<class_id::binary>>, %Config{} = config) do
+  def account_groups(<<_, _::binary>> = class_id, %Config{} = config) do
     class = apply(config.chart_of_accounts, :class, [class_id])
 
     case class do
       nil -> raise(ArgumentError, "Account class #{class_id} doesn't exist in #{inspect(config.chart_of_accounts)}")
       %AccountClass{parent_id: nil} -> [class.id]
-      %AccountClass{parent_id: <<parent_id::binary>>} -> [class.id | resolve_account_groups(parent_id, config)]
+      %AccountClass{parent_id: <<parent_id::binary>>} -> [class.id | account_groups(parent_id, config)]
     end
+  end
+
+  @doc false
+  def balance_after!(%{} = multi_result, <<_, _::binary>> = account_id) do
+    %Decimal{} =
+      balance_after =
+      multi_result
+      |> Map.fetch!(to_existing_atom_safe("bookk_#{account_id}"))
+      |> Map.fetch!(:balance)
+
+    balance_after
   end
 
   @doc false
@@ -346,6 +371,9 @@ defmodule Bookk.Ecto do
     |> multi_reduce(ledger_ops, &post_op(&1, &2, tx, config))
   end
 
+  @doc false
+  def transaction_id!(%{} = multi_result), do: Map.fetch!(multi_result, :bookk_transaction_id)
+
   #
   #   PRIVATE
   #
@@ -354,7 +382,7 @@ defmodule Bookk.Ecto do
   defp multi_reduce(multi, [head | tail], fun), do: multi_reduce(fun.(multi, head), tail, fun)
 
   defp post_op(multi, {ledger_id, %Op{} = op}, tx, %Config{} = config) do
-    account_id = "#{ledger_id}:#{op.account_head.name}"
+    account_id = apply(config.chart_of_accounts, :account_id, [ledger_id, op.account_head])
 
     payload = %{
       transaction_id: tx.id,
@@ -362,7 +390,7 @@ defmodule Bookk.Ecto do
       account_id: account_id,
       account_name: op.account_head.name,
       account_class_id: op.account_head.class.id,
-      account_groups: resolve_account_groups(op.account_head.class.id, config),
+      account_groups: account_groups(op.account_head.class.id, config),
       account_meta: op.account_head.meta,
       delta_amount: to_delta_amount(op),
       accounts_table: config.accounts_table,
