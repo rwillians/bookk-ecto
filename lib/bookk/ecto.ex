@@ -249,6 +249,37 @@ defmodule Bookk.Ecto do
         do: unquote(__MODULE__).balance_after(multi_result, account_id, @config)
 
       @doc ~S"""
+      Returns a schema for when you want to build associations for
+      an Ecto schema of your own.
+
+          import MyApp.Bookkeeping, only: [bookk_schema: 1]
+
+          schema "wallets" do
+            # ...
+            belongs_to :cash_account, bookk_schema(:account)
+            # ...
+          end
+
+          schema "transactions" do
+            # ...
+            has_many :account_entries, bookk_schema(:account_entry)
+            # ...
+          end
+
+      """
+      defmacro bookk_schema(:account) do
+        quote do
+          {unquote(@config.accounts_table), Bookk.Ecto.Account}
+        end
+      end
+
+      defmacro bookk_schema(:account_entry) do
+        quote do
+          {unquote(@config.account_entries_table), Bookk.Ecto.AccountEntry}
+        end
+      end
+
+      @doc ~S"""
       Returns the configured accounts / account entries table name and model.
 
           from a in bookk_table(:accounts),
