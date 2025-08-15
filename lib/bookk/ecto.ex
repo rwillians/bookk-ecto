@@ -3,7 +3,10 @@ defmodule Bookk.Ecto do
   Ecto persistense layer adapter for `Bookk`.
 
       defmodule MyApp.Bookkeeping do
-        use Bookk.Ecto, repo: Pag3.Repo
+        use Bookk.Ecto, repo: MyApp.Repo
+
+        alias Bookk.AccountClass, as: Class
+        alias Bookk.AccountHead, as: Account
 
         @impl Bookk.ChartOfAccounts
         def ledger(:main), do: "main"
@@ -13,13 +16,16 @@ defmodule Bookk.Ecto do
         def class("CA"), do: %Class{id: "CA", parent_id: "A", name: "Current Assets", natural_balance: :debit}
 
         @impl Bookk.ChartOfAccounts
-        def account(:cash), do: %Account{name: "cash/CA", class: class("CA")}
+        def account(:cash), do: %Account{name: "cash", class: class("CA")}
+
+        @impl Bookk.ChartOfAccounts
+        def account_id(ledger_id, %Account{} = account), do: "#{ledger_id}:#{account.name}/#{account.class.id}"
       end
 
   ## Options
 
   - `otp_app`: the name of your OTP app. This option is required if you want to
-    set options in your config files;
+    configure bookk ecto's settings in your config files;
   - `repo`: required, the Ecto repository to which the bookkeeping state should
     be persisted;
   - `accounts_table`: the name of the table where the accounts' balance state
@@ -69,8 +75,45 @@ defmodule Bookk.Ecto do
       defmodule MyApp.BookkeepingV2 do
         use Bookk.Ecto,
           otp_app: :my_app,
-          accounts_table: "bookkeeping_v2__accounts",
-          account_entries_table: "bookkeeping_v2__account_entries"
+          accounts_table: "bookk_accounts",
+          account_entries_table: "bookk_acount_entries"
+      end
+
+  ## Migration
+
+  These are the tables and indexes that should be created:
+
+      defmodule MyApp.Repo.Migrations.CreateBookkTables do
+        use Ecto.Migration
+
+        def change do
+          create table(:bookk_accounts, primary_key: false) do
+            add :id, :string, size: 255, primary_key: true
+            add :ledger_id, :string, size: 48, null: false
+            add :name, :string, size: 207, null: false
+            add :class, :string, size: 3, null: false
+            add :groups, {:array, :string}, size: 3, null: false
+            add :balance, :decimal, null: false
+            add :meta, :map, null: false
+            add :inserted_at, :utc_datetime_usec, null: false
+            add :updated_at, :utc_datetime_usec, null: false
+          end
+
+          create index(:bookk_accounts, [:ledger_id])
+          create index(:bookk_accounts, [:groups], using: :gin)
+
+          create table(:bookk_acount_entries, primary_key: false) do
+            add :id, :uuid, primary_key: true
+            add :account_id, :string, size: 255, null: false
+            add :transaction_id, :uuid, null: false
+            add :delta_amount, :decimal, null: false
+            add :balance_after, :decimal, null: false
+            add :inserted_at, :utc_datetime_usec, null: false
+          end
+
+          create index(:bookk_acount_entries, [:account_id, "inserted_at ASC"])
+          create index(:bookk_acount_entries, [:transaction_id])
+        end
       end
 
   """
@@ -180,17 +223,30 @@ defmodule Bookk.Ecto do
           account = MyApp.Bookkeeping.account(:cash)
           account_id = MyApp.Bookkeeping.account_id(ledger, account)
 
-          balance_after = MyApp.Bookkeeping.balance_after!(multi_result, account_id)
-          # %Decimal{...}
+          MyApp.Bookkeeping.balance_after(multi_result, account_id)
+          #> %Decimal{...}
 
+      Alternatively, you can provide the ledger code and the account
+      code directly to `balance_after/2` instead of the account id:
+
+        ledger_code = :acme
+        account_code = :cash
+
+        MyApp.Bookkeeping.balance_after(multi_result, {ledger_code, account_code})
+        #> %Decimal{...}
+
+      If the multi result object doesn't contain the account's balance,
+      it will return zero.
       """
-      @spec balance_after!(multi_result, account_id) :: balance
+      @spec balance_after(multi_result, account_id | {ledger_code, account_code}) :: balance
             when multi_result: map(),
                  account_id: String.t(),
+                 ledger_code: term(),
+                 account_code: term(),
                  balance: Decimal.t()
 
-      def balance_after!(%{} = multi_result, <<_, _::binary>> = account_id),
-        do: unquote(__MODULE__).balance_after!(multi_result, account_id)
+      def balance_after(%{} = multi_result, <<_, _::binary>> = account_id),
+        do: unquote(__MODULE__).balance_after(multi_result, account_id, @config)
 
       @doc ~S"""
       Returns the configured accounts / account entries table name and model.
@@ -328,14 +384,24 @@ defmodule Bookk.Ecto do
   end
 
   @doc false
-  def balance_after!(%{} = multi_result, <<_, _::binary>> = account_id) do
+  def balance_after(%{} = multi_result, <<_, _::binary>> = account_id, _) do
     %Decimal{} =
       balance_after =
       multi_result
-      |> Map.fetch!(to_existing_atom_safe("bookk_#{account_id}"))
-      |> Map.fetch!(:balance)
+      |> Map.get(to_existing_atom_safe("bookk_#{account_id}"), %{})
+      |> Map.get(:balance, Decimal.new(0))
 
     balance_after
+  end
+
+  def balance_after(%{} = multi_result, {ledger_code, account_code}, %Config{} = config) do
+    %Config{chart_of_accounts: coa} = config
+
+    ledger_id = apply(coa, :ledger, [ledger_code])
+    account_head = apply(coa, :account, [account_code])
+    account_id = apply(coa, :account_id, [ledger_id, account_head])
+
+    balance_after(multi_result, account_id, config)
   end
 
   @doc false
