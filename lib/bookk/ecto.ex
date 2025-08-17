@@ -9,9 +9,6 @@ defmodule Bookk.Ecto do
         alias Bookk.AccountHead, as: Account
 
         @impl Bookk.ChartOfAccounts
-        def ledger(:main), do: "main"
-
-        @impl Bookk.ChartOfAccounts
         def class("A"), do: %Class{id: "A", parent_id: nil, name: "Assets", natural_balance: :debit}
         def class("CA"), do: %Class{id: "CA", parent_id: "A", name: "Current Assets", natural_balance: :debit}
 
@@ -19,7 +16,7 @@ defmodule Bookk.Ecto do
         def account(:cash), do: %Account{name: "cash", class: class("CA")}
 
         @impl Bookk.ChartOfAccounts
-        def account_id(ledger_id, %Account{} = account), do: "#{ledger_id}:#{account.name}/#{account.class.id}"
+        def ledger_id(:main), do: "main"
       end
 
   ## Options
@@ -158,7 +155,7 @@ defmodule Bookk.Ecto do
   defmacro __using__(opts_from_use) do
     otp_app = Keyword.get(opts_from_use, :otp_app)
 
-    quote do
+    quote location: :keep do
       @config [chart_of_accounts: __MODULE__]
               |> Keyword.merge(if(is_atom(unquote(otp_app)), do: Application.compile_env(unquote(otp_app), __MODULE__, []), else: []))
               |> Keyword.merge(unquote(opts_from_use))
@@ -219,9 +216,9 @@ defmodule Bookk.Ecto do
 
           {:ok, multi_result} = MyApp.Bookkeeping.post(interledger_entry)
 
-          ledger = MyApp.Bookkeeping.ledger(:acme)
+          ledger_id = MyApp.Bookkeeping.ledger_id(:acme)
           account = MyApp.Bookkeeping.account(:cash)
-          account_id = MyApp.Bookkeeping.account_id(ledger, account)
+          account_id = MyApp.Bookkeeping.account_id(ledger_id, account)
 
           MyApp.Bookkeeping.balance_after(multi_result, account_id)
           #> %Decimal{...}
@@ -249,8 +246,12 @@ defmodule Bookk.Ecto do
         do: unquote(__MODULE__).balance_after(multi_result, account_id, @config)
 
       @doc ~S"""
-      Returns a schema for when you want to build associations for
-      an Ecto schema of your own.
+      Returns a queriable that can be used either for defining schema
+      relations ships or when composing a query.
+
+      ## Examples
+
+      Using it in a schema:
 
           import MyApp.Bookkeeping, only: [bookk_schema: 1]
 
@@ -266,6 +267,13 @@ defmodule Bookk.Ecto do
             # ...
           end
 
+      Using it in a query:
+
+          import MyApp.Bookkeeping, only: [bookk_schema: 1]
+
+          from a in bookk_schema(:accounts)
+          from a in bookk_schema(:account_entries)
+
       """
       defmacro bookk_schema(:account) do
         quote do
@@ -280,30 +288,8 @@ defmodule Bookk.Ecto do
       end
 
       @doc ~S"""
-      Returns the configured accounts / account entries table name and model.
-
-          from a in bookk_table(:accounts),
-            where: a.updated_at >= ^timestamp
-
-          from a in bookk_table(:account_entries),
-            where: a.created_at >= ^timestamp
-
-      """
-      defmacro bookk_table(:accounts) do
-        quote do
-          {unquote(@config.accounts_table), Bookk.Ecto.Account}
-        end
-      end
-
-      defmacro bookk_table(:account_entries) do
-        quote do
-          {unquote(@config.account_entries_table), Bookk.Ecto.AccountEntry}
-        end
-      end
-
-      @doc ~S"""
-      DSL macro for creating a `Bookk.InterledgerEntry`. Returns an :ok|:error
-      tuple, where it will be an :error if the journal entry is unbalanced.
+      Same as `Bookk.Notation.journalize/2` but uses the
+      `chart_of_accounts` defined in your bookkeeping module.
 
           journalize do
             on ledger(:main) do
@@ -327,7 +313,8 @@ defmodule Bookk.Ecto do
       end
 
       @doc ~S"""
-      Same as `journalize/1` but raises if the interledger entry is unbalanced.
+      Same as `Bookk.Notation.journalize!/2` but uses the
+      `chart_of_accounts` defined in your bookkeeping module.
 
           journalize! do
             on ledger(:main) do
@@ -428,7 +415,7 @@ defmodule Bookk.Ecto do
   def balance_after(%{} = multi_result, {ledger_code, account_code}, %Config{} = config) do
     %Config{chart_of_accounts: coa} = config
 
-    ledger_id = apply(coa, :ledger, [ledger_code])
+    ledger_id = apply(coa, :ledger_id, [ledger_code])
     account_head = apply(coa, :account, [account_code])
     account_id = apply(coa, :account_id, [ledger_id, account_head])
 
@@ -454,9 +441,9 @@ defmodule Bookk.Ecto do
   @doc false
   def post(%Multi{} = multi, %InterledgerEntry{} = entry, %Config{} = config) do
     ledger_ops =
-      for {ledger, journal_entry} <- to_journal_entries(entry),
+      for {ledger_id, journal_entry} <- to_journal_entries(entry),
           op <- to_operations(journal_entry),
-          do: {ledger, op}
+          do: {ledger_id, op}
 
     tx = %{
       id: ULID.generate(),
