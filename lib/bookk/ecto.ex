@@ -271,8 +271,8 @@ defmodule Bookk.Ecto do
 
           import MyApp.Bookkeeping, only: [bookk_schema: 1]
 
-          from a in bookk_schema(:accounts)
-          from a in bookk_schema(:account_entries)
+          from a in bookk_schema(:account)
+          from a in bookk_schema(:account_entry)
 
       """
       defmacro bookk_schema(:account) do
