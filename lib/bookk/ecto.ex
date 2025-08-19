@@ -336,32 +336,10 @@ defmodule Bookk.Ecto do
       end
 
       @doc ~S"""
-      Posts an interledger entry to the bookkeeping pesisted state in the
-      configured Ecto repository, returning the id of the transaction.
-
-          {:ok, result} = MyApp.Bookkeeping.post(interledger_entry)
-
-          result.bookk_transaction_id
-          #> "01K2F8W26ACNQJA9R34Z43QP8S"
-
-      """
-      @spec post(Bookk.InterledgerEntry.t()) ::
-              {:ok, result}
-              | {:error, multi_op_name, reason, result}
-            when result: map(),
-                 multi_op_name: atom(),
-                 reason: term()
-
-      def post(%Bookk.InterledgerEntry{} = interledger_entry) do
-        Ecto.Multi.new()
-        |> unquote(__MODULE__).post(interledger_entry, @config)
-        |> @config.repo.transaction()
-      end
-
-      @doc ~S"""
-      Same as `post/1` but appends all the database operations to the given
-      `Ecto.Multi`. The transaction id is populated into the multi's result
-      object under the key :bookk_transaction_id.
+      Appends all the database operations related to posting the side effects of
+      the given interledger entry to the database into the given `Ecto.Multi`.
+      The transaction id is populated into the multi's result object under the
+      key :bookk_transaction_id.
 
           {:ok, result} =
             Ecto.Multi.new()
@@ -426,14 +404,8 @@ defmodule Bookk.Ecto do
   def parse_config(opts) do
     {parsed, errors} = Options.parse(@options, opts)
 
-    first_error_message =
-      with {key, message} <- List.first(errors),
-           do: "Invalid option :#{key} provideded to #{__MODULE__}: #{message}"
-
-    unless is_nil(first_error_message) do
-      raise ArgumentError,
-        message: first_error_message
-    end
+    with {key, message} <- List.first(errors),
+         do: raise(ArgumentError, "Invalid option :#{key} provideded to #{__MODULE__}: #{message}")
 
     struct!(Config, parsed)
   end
