@@ -1,6 +1,11 @@
 defmodule Bookk.Ecto.Account do
   @moduledoc ~S"""
-  Ecto model for a Ledger's Account.
+  Ecto schema for a Ledger's Account.
+
+  ## Related
+
+  - `Bookk.Ledger`;
+  - `Bookk.Account`.
   """
 
   use Ecto.Schema

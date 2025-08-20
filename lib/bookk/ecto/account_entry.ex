@@ -1,7 +1,13 @@
 defmodule Bookk.Ecto.AccountEntry do
   @moduledoc ~S"""
-  Ecto model for an Account Entry, which is a log of all the operations
-  applied to a Ledger's Account.
+  Ecto schema for an Account Entry, which is a log of Operations applied to a
+  Ledger's Account.
+
+  ## Related
+
+  - `Bookk.Ledger`;
+  - `Bookk.Account`;
+  - `Bookk.Operation`.
   """
 
   use Ecto.Schema
