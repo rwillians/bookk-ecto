@@ -165,8 +165,6 @@ defmodule Bookk.Ecto do
         use Bookk.ChartOfAccounts
       end
 
-      require Bookk.Notation
-
       @doc ~S"""
       Introspection function that returns the module's configs.
 
@@ -286,29 +284,6 @@ defmodule Bookk.Ecto do
           {unquote(@config.account_entries_table), Bookk.Ecto.AccountEntry}
         end
       end
-
-      @doc ~S"""
-      Same as `Bookk.Notation.journalize/2` but uses the
-      `chart_of_accounts` defined in your bookkeeping module.
-
-          journalize do
-            on ledger(:main) do
-              debit account(:cash), 100
-              credit account(:revenue), 100
-            end
-          end
-          #> {:ok, %Bookk.InterledgerEntry{...}}
-
-      """
-      @spec journalize([option], do: term()) ::
-              {:ok, Bookk.InterledgerEntry.t()}
-              | {:error, Bookk.UnbalancedError.t()}
-            when option:
-                   {:compact, boolean()}
-                   | {:on_unabalanced, boolean()}
-
-      defmacro journalize(opts \\ [], do: block),
-        do: Bookk.Notation.journalize([{:using, @config.chart_of_accounts} | opts], do: block)
 
       @doc ~S"""
       Appends all the database operations related to posting the side effects of
