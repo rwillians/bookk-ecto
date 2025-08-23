@@ -8,7 +8,7 @@ defmodule Bookk.Options do
   @doc ~S"""
   Parses a keyword list of data according to a given schema.
 
-      iex> @schema [
+      iex> schema = [
       iex>   otp_app: [type: :atom, required: true],
       iex>   accounts_table: [type: :string, default: "bookk_accounts"]
       iex> ]
@@ -17,10 +17,10 @@ defmodule Bookk.Options do
       iex>   otp_app: :my_app
       iex> ]
       iex>
-      iex> Bookk.Options.parse(@schema, options)
+      iex> Bookk.Options.parse(schema, options)
       {[otp_app: :my_app, accounts_table: "bookk_accounts"], []}
 
-      iex> @schema [
+      iex> schema = [
       iex>   otp_app: [type: :atom, required: true],
       iex>   accounts_table: [type: :string, default: "bookk_accounts"]
       iex> ]
@@ -30,7 +30,7 @@ defmodule Bookk.Options do
       iex>   accounts_table: :bookk_accounts
       iex> ]
       iex>
-      iex> Bookk.Options.parse(@schema, options)
+      iex> Bookk.Options.parse(schema, options)
       {[], [
         otp_app: "expected an atom, got \"my_app\"",
         accounts_table: "expected a string, got :bookk_accounts"
