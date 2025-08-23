@@ -165,7 +165,7 @@ defmodule Bookk.Ecto do
         use Bookk.ChartOfAccounts
       end
 
-      import Bookk.Notation, only: [journalize: 2, journalize!: 2]
+      import Bookk.Notation, only: [journalize: 2]
 
       @doc ~S"""
       Introspection function that returns the module's configs.
@@ -300,36 +300,16 @@ defmodule Bookk.Ecto do
           #> {:ok, %Bookk.InterledgerEntry{...}}
 
       """
-      @spec journalize(do: term()) ::
+      @spec journalize([option], do: term()) ::
               {:ok, Bookk.InterledgerEntry.t()}
               | {:error, Bookk.UnbalancedError.t()}
+            when option:
+                   {:compact, boolean()}
+                   | {:on_unabalanced, boolean()}
 
-      defmacro journalize(do: block) do
+      defmacro journalize(opts \\ [], do: block) do
         quote do
-          journalize using: unquote(@config.chart_of_accounts) do
-            unquote(block)
-          end
-        end
-      end
-
-      @doc ~S"""
-      Same as `Bookk.Notation.journalize!/2` but uses the
-      `chart_of_accounts` defined in your bookkeeping module.
-
-          journalize! do
-            on ledger(:main) do
-              debit account(:cash), 100
-              credit account(:revenue), 100
-            end
-          end
-          #> %Bookk.InterledgerEntry{...}
-
-      """
-      @spec journalize(do: term()) :: Bookk.InterledgerEntry.t()
-
-      defmacro journalize!(do: block) do
-        quote do
-          journalize! using: unquote(@config.chart_of_accounts) do
+          journalize [{:using, unquote(@config.chart_of_accounts)} | unquote(opts)] do
             unquote(block)
           end
         end
@@ -359,12 +339,12 @@ defmodule Bookk.Ecto do
       Fetches bookk's transaction id from the given multi result
       object.
       """
-      @spec transaction_id!(multi_result) :: transaction_id
+      @spec fetch_transaction_id!(multi_result) :: transaction_id
             when multi_result: map(),
                  transaction_id: String.t()
 
-      def transaction_id!(%{} = multi_result),
-        do: unquote(__MODULE__).transaction_id!(multi_result)
+      def fetch_transaction_id!(%{} = multi_result),
+        do: unquote(__MODULE__).fetch_transaction_id!(multi_result)
     end
   end
 
@@ -428,7 +408,7 @@ defmodule Bookk.Ecto do
   end
 
   @doc false
-  def transaction_id!(%{} = multi_result), do: Map.fetch!(multi_result, :bookk_transaction_id)
+  def fetch_transaction_id!(%{} = multi_result), do: Map.fetch!(multi_result, :bookk_transaction_id)
 
   #
   #   PRIVATE
