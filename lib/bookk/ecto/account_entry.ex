@@ -15,7 +15,7 @@ defmodule Bookk.Ecto.AccountEntry do
   import Ecto.Changeset
 
   @type t() :: %Bookk.Ecto.AccountEntry{
-          id: Ecto.ULID.t(),
+          id: Bookk.Ecto.UUIDv7.t(),
           account_id: String.t(),
           transaction_id: String.t(),
           delta_amount: Decimal.t(),
@@ -23,10 +23,10 @@ defmodule Bookk.Ecto.AccountEntry do
           inserted_at: DateTime.t()
         }
 
-  @primary_key {:id, Ecto.ULID, autogenerate: true}
+  @primary_key {:id, Bookk.Ecto.UUIDv7, autogenerate: true}
   schema "bookk_account_entries" do
     field :account_id, :string
-    field :transaction_id, Ecto.ULID
+    field :transaction_id, Bookk.Ecto.UUIDv7
     field :delta_amount, :decimal
     field :balance_after, :decimal
     field :inserted_at, :utc_datetime_usec

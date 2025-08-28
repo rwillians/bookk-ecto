@@ -90,7 +90,7 @@ defmodule Bookk.Ecto do
             add :name, :string, size: 207, null: false
             add :class, :string, size: 3, null: false
             add :groups, {:array, :string}, size: 3, null: false
-            add :balance, :decimal, null: false
+            add :balance, :decimal, precision: 14, scale: 2, null: false
             add :meta, :map, null: false
             add :inserted_at, :utc_datetime_usec, null: false
             add :updated_at, :utc_datetime_usec, null: false
@@ -103,8 +103,8 @@ defmodule Bookk.Ecto do
             add :id, :uuid, primary_key: true
             add :account_id, :string, size: 255, null: false
             add :transaction_id, :uuid, null: false
-            add :delta_amount, :decimal, null: false
-            add :balance_after, :decimal, null: false
+            add :delta_amount, :decimal, precision: 14, scale: 2, null: false
+            add :balance_after, :decimal, precision: 14, scale: 2, null: false
             add :inserted_at, :utc_datetime_usec, null: false
           end
 
@@ -125,11 +125,11 @@ defmodule Bookk.Ecto do
   alias Bookk.AccountClass
   alias Bookk.Ecto.Account
   alias Bookk.Ecto.AccountEntry
+  alias Bookk.Ecto.UUIDv7
   alias Bookk.InterledgerEntry
   alias Bookk.Operation, as: Op
   alias Bookk.Options
   alias Ecto.Multi
-  alias Ecto.ULID
 
   @options otp_app: [type: :atom],
            repo: [type: :module, required: true],
@@ -368,7 +368,7 @@ defmodule Bookk.Ecto do
           do: {ledger_id, op}
 
     tx = %{
-      id: ULID.generate(),
+      id: UUIDv7.generate(),
       timestamp: DateTime.utc_now()
     }
 
