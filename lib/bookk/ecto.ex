@@ -286,6 +286,17 @@ defmodule Bookk.Ecto do
       end
 
       @doc ~S"""
+      Fetches bookk's transaction id from the given multi result
+      object.
+      """
+      @spec fetch_transaction_id!(multi_result) :: transaction_id
+            when multi_result: map(),
+                 transaction_id: String.t()
+
+      def fetch_transaction_id!(%{} = multi_result),
+        do: unquote(__MODULE__).fetch_transaction_id!(multi_result)
+
+      @doc ~S"""
       Appends all the database operations related to posting the side effects of
       the given interledger entry to the database into the given `Ecto.Multi`.
       The transaction id is populated into the multi's result object under the
@@ -304,17 +315,6 @@ defmodule Bookk.Ecto do
 
       def post(%Ecto.Multi{} = multi, %Bookk.InterledgerEntry{} = interledger_entry),
         do: unquote(__MODULE__).post(multi, interledger_entry, @config)
-
-      @doc ~S"""
-      Fetches bookk's transaction id from the given multi result
-      object.
-      """
-      @spec fetch_transaction_id!(multi_result) :: transaction_id
-            when multi_result: map(),
-                 transaction_id: String.t()
-
-      def fetch_transaction_id!(%{} = multi_result),
-        do: unquote(__MODULE__).fetch_transaction_id!(multi_result)
     end
   end
 
