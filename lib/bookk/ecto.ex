@@ -3,7 +3,7 @@ defmodule Bookk.Ecto do
   Ecto persistense layer adapter for `Bookk`.
 
       defmodule MyApp.Bookkeeping do
-        use Bookk.Ecto, repo: MyApp.Repo
+        use Bookk.Ecto
 
         alias Bookk.AccountClass, as: Class
         alias Bookk.AccountHead, as: Account
@@ -23,8 +23,6 @@ defmodule Bookk.Ecto do
 
   - `otp_app`: the name of your OTP app. This option is required if you want to
     configure bookk ecto's settings in your config files;
-  - `repo`: required, the Ecto repository to which the bookkeeping state should
-    be persisted;
   - `accounts_table`: the name of the table where the accounts' balance state
     should be persisted. Defaults to "bookk_accounts";
   - `account_entries_table`: the name of the table where the accounts balances'
@@ -35,7 +33,6 @@ defmodule Bookk.Ecto do
 
         defmodule MyApp.Bookkeeping do
           use Bookk.Ecto,
-            repo: MyApp.Repo,
             accounts_table: "bookkeeping_accounts",
             account_entries_table: "bookkeeping_account_entries",
             chart_of_accounts: MyApp.Bookkeeping.ChartOfAccounts
@@ -45,7 +42,6 @@ defmodule Bookk.Ecto do
   the configuration key is the name of your bookkeeping module:
 
       config :my_app, MyApp.Bookkeeping,
-        repo: MyApp.Repo,
         accounts_table: "bookk_accounts",
         account_entries_table: "bookk_account_entries",
         chart_of_accounts: MyApp.Bookkeeping.ChartOfAccounts
@@ -60,12 +56,11 @@ defmodule Bookk.Ecto do
   to override to `Bookk.Ecto`:
 
       config :my_app, MyApp.Bookkeeping,
-        repo: MyApp.Repo
+        accounts_table: "bookkeeping_v1__accounts"
 
       defmodule MyApp.BookkeepingV1 do
         use Bookk.Ecto,
           otp_app: :my_app,
-          accounts_table: "bookkeeping_v1__accounts",
           account_entries_table: "bookkeeping_v1__account_entries"
       end
 
@@ -132,21 +127,18 @@ defmodule Bookk.Ecto do
   alias Ecto.Multi
 
   @options otp_app: [type: :atom],
-           repo: [type: :module, required: true],
            accounts_table: [type: :string, required: true, default: "bookk_accounts"],
            account_entries_table: [type: :string, required: true, default: "bookk_account_entries"],
            chart_of_accounts: [type: :module, required: true]
 
   @type t() :: %Config{
           otp_app: atom() | nil,
-          repo: Ecto.Repo.t(),
           accounts_table: String.t(),
           account_entries_table: String.t(),
           chart_of_accounts: module()
         }
 
   defstruct otp_app: nil,
-            repo: nil,
             accounts_table: nil,
             account_entries_table: nil,
             chart_of_accounts: nil
@@ -187,7 +179,6 @@ defmodule Bookk.Ecto do
 
       The available configs are:
       - `:otp_app`;
-      - `:repo`;
       - `:accounts_table`;
       - `:account_entries_table`; and
       - `:chart_of_accounts`;
